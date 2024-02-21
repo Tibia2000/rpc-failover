@@ -1,0 +1,73 @@
+import logging
+from flask import Flask, request, jsonify
+import requests
+import threading
+import time
+
+app = Flask(__name__)
+
+# Configure logging to write to a file
+log_file = '/var/log/rpc_failover.log'
+logging.basicConfig(filename=log_file, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Define your number of sets of primary and fallback RPC endpoints
+rpc_sets = [
+    {"primary": "https://arb-mai", "secondary": "https://arbitrum.blxxxxxxxxxxxxxxxxx"},
+    {"primary": "https://arbixxxxxxxxxxxxxxxxxx", "secondary": "https://arb-maixxxxxxxxxxxxxxxU"},
+]
+
+# Add global variables to store the current RPC, counters, and last switch time
+current_rpc = None
+last_primary_health_time = None
+timeout_threshold = 2  # Set the timeout threshold in seconds
+minutes_threshold = 2  # Set the minutes threshold
+
+def is_rpc_healthy(rpc_url):
+    try:
+        response = requests.get(rpc_url, timeout=1)  # Adjust timeout as needed
+        response.raise_for_status()
+        return True
+    except requests.exceptions.RequestException:
+        return False
+
+def periodically_check_primary_health():
+    global current_rpc, last_primary_health_time
+    while True:
+        primary_rpc = current_rpc if current_rpc else rpc_set["primary"]
+        if not is_rpc_healthy(primary_rpc):
+            if current_rpc != rpc_set["secondary"]:
+                current_rpc = rpc_set["secondary"]
+                logging.warning("Failover to secondary RPC endpoint: %s", rpc_set["secondary"])
+                last_primary_health_time = None  # Reset last_primary_health_time when switching to secondary
+        elif current_rpc == rpc_set["secondary"]:
+            last_primary_health_time = time.time()  # Update last_primary_health_time when primary becomes healthy
+            logging.info("Primary RPC endpoint is healthy.")
+        elif last_primary_health_time and time.time() - last_primary_health_time >= minutes_threshold * 60:
+            current_rpc = rpc_set["primary"]
+            logging.info("Switched back to primary RPC endpoint: %s", rpc_set["primary"])
+
+        time.sleep(60)
+
+# Start the periodic health check in a separate thread
+health_check_thread = threading.Thread(target=periodically_check_primary_health)
+health_check_thread.start()
+
+@app.route('/rpc', methods=['POST'])
+def proxy_rpc_request():
+    json_data = request.get_json()
+
+    # Extract the RPC set index from the incoming request
+    rpc_set_index = int(request.args.get('rpc_set_index', 0))
+    rpc_set = rpc_sets[rpc_set_index]
+
+    try:
+        response = requests.post(current_rpc, json=json_data)
+        response.raise_for_status()
+        return jsonify(response.json()), response.status_code
+    except requests.exceptions.RequestException as e:
+        logging.error("RPC request to %s failed: %s", current_rpc, e)
+        return jsonify({"error": "RPC request failed"}), 500
+
+if __name__ == '__main__':
+    # Use Gunicorn to run the application
+    app.run(host='0.0.0.0', port=5000)
