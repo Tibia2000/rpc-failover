@@ -20,11 +20,11 @@ rpc_sets = [
 current_rpc = None
 last_primary_health_time = None
 timeout_threshold = 2  # Set the timeout threshold in seconds
-minutes_threshold = 2  # Set the minutes threshold
+minutes_threshold = 1  # Set the minutes threshold
 
 def is_rpc_healthy(rpc_url):
     try:
-        response = requests.get(rpc_url, timeout=1)  # Adjust timeout as needed
+        response = requests.get(rpc_url, timeout=timeout_threshold)
         response.raise_for_status()
         return True
     except requests.exceptions.RequestException:
@@ -33,19 +33,15 @@ def is_rpc_healthy(rpc_url):
 def periodically_check_primary_health():
     global current_rpc, last_primary_health_time
     while True:
-        primary_rpc = current_rpc if current_rpc else rpc_set["primary"]
-        if not is_rpc_healthy(primary_rpc):
-            if current_rpc != rpc_set["secondary"]:
+        if current_rpc == rpc_set["secondary"]:
+            if is_rpc_healthy(rpc_set["primary"]):
+                current_rpc = rpc_set["primary"]
+                last_primary_health_time = time.time()  # Update last_primary_health_time when primary becomes healthy
+                logging.info("Primary RPC endpoint is healthy.")
+        elif current_rpc == rpc_set["primary"] and last_primary_health_time:
+            if time.time() - last_primary_health_time >= minutes_threshold * 60:
                 current_rpc = rpc_set["secondary"]
                 logging.warning("Failover to secondary RPC endpoint: %s", rpc_set["secondary"])
-                last_primary_health_time = None  # Reset last_primary_health_time when switching to secondary
-        elif current_rpc == rpc_set["secondary"]:
-            last_primary_health_time = time.time()  # Update last_primary_health_time when primary becomes healthy
-            logging.info("Primary RPC endpoint is healthy.")
-        elif last_primary_health_time and time.time() - last_primary_health_time >= minutes_threshold * 60:
-            current_rpc = rpc_set["primary"]
-            logging.info("Switched back to primary RPC endpoint: %s", rpc_set["primary"])
-
         time.sleep(60)
 
 # Start the periodic health check in a separate thread
@@ -54,6 +50,7 @@ health_check_thread.start()
 
 @app.route('/rpc', methods=['POST'])
 def proxy_rpc_request():
+    global current_rpc
     json_data = request.get_json()
 
     # Extract the RPC set index from the incoming request
@@ -63,10 +60,17 @@ def proxy_rpc_request():
     try:
         response = requests.post(current_rpc, json=json_data)
         response.raise_for_status()
+        if current_rpc == rpc_set["secondary"]:
+            current_rpc = rpc_set["primary"]  # Switch back to primary if request was successful
+            logging.info("Switched back to primary RPC endpoint: %s", rpc_set["primary"])
         return jsonify(response.json()), response.status_code
     except requests.exceptions.RequestException as e:
-        logging.error("RPC request to %s failed: %s", current_rpc, e)
-        return jsonify({"error": "RPC request failed"}), 500
+        error_message = f"RPC request to {current_rpc} failed: {e}"
+        logging.error(error_message)
+        if current_rpc == rpc_set["primary"]:
+            current_rpc = rpc_set["secondary"]  # Switch to secondary if request failed on primary
+            logging.warning("Switched to secondary RPC endpoint: %s", rpc_set["secondary"])
+        return jsonify({"error": error_message}), 500
 
 if __name__ == '__main__':
     # Use Gunicorn to run the application
