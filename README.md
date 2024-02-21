@@ -5,10 +5,26 @@ This project implements a Flask-based RPC failover system using Gunicorn as a WS
 
 ## Features
 
-- Automatic failover between primary and fallback RPC endpoints.
-- Periodic health checks to monitor the availability of primary RPC endpoints.
-- Seamless integration with Gunicorn for serving the Flask application.
-- Easily configurable through Flask script.
+
+Periodic health checks for the primary endpoint.
+Dynamic failover between primary and secondary endpoints based on health status.
+Monitoring of regular RPC calls for errors and error messages.
+Switching back to the primary endpoint after it has been healthy for a specified duration (minutes_threshold).
+## Failover logic v1.1
+
+In the provided script, the failover mechanism allows switching back to the primary endpoint after it has been healthy for a specified duration. This duration is controlled by the minutes_threshold variable, which represents the minimum amount of time the primary endpoint must remain healthy before switching back to it.
+
+Here's how the script determines when to switch back to the primary endpoint:
+
+Primary Endpoint Health Check:
+
+The script continuously monitors the health status of the primary endpoint using the periodically_check_primary_health function.
+If the primary endpoint is found to be healthy during the periodic health check and has been unhealthy for at least the specified minutes_threshold, the script triggers a switch back to the primary endpoint.
+Switch Back to Primary Endpoint:
+
+Once the primary endpoint has been healthy for at least the specified duration (minutes_threshold), the script switches back to using the primary endpoint for subsequent requests.
+After switching back to the primary endpoint, the script continues to monitor its health status to ensure continued reliability of the service.
+By implementing this mechanism, the script ensures that the primary endpoint is given a grace period to stabilize and demonstrate sustained health before resuming normal operation. This approach helps prevent rapid toggling between primary and secondary endpoints, providing a more stable and reliable failover strategy.
 
 ## Prerequisites
 
