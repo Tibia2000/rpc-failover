@@ -1,15 +1,18 @@
+# Gunicorn Service Configuration
+
 [Unit]
 Description=Gunicorn instance to serve myapp
-After=network.target
+After=network.target  # Ensure that the service starts after the network is up
 
 [Service]
-User=livepeer
-Group=livepeer
-WorkingDirectory=/etc/python
+User=livepeer  # Run the service as the user 'livepeer'
+Group=livepeer  # Run the service in the 'livepeer' group
+WorkingDirectory=/etc/python  # Set the working directory for the service
 ExecStart=/usr/local/bin/gunicorn -w 2 -b 0.0.0.0:5000 rpc_failover:app --log-level debug --timeout 90
-Restart=always
+# Start Gunicorn with 2 worker processes, bind to all interfaces on port 5000,
+# and use the 'rpc_failover' module's 'app' object as the WSGI application.
+# Set log level to debug and timeout to 90 seconds.
+Restart=always  # Restart the service automatically if it crashes
 
 [Install]
-WantedBy=multi-user.target
-
-
+WantedBy=multi-user.target  # Enable the service to start at boot for multi-user systems
