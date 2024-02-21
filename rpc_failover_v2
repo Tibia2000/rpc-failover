@@ -24,11 +24,21 @@ minutes_threshold = 1  # Set the minutes threshold
 
 def is_rpc_healthy(rpc_url):
     try:
-        response = requests.get(rpc_url, timeout=timeout_threshold)
+        response = requests.post(rpc_url, json={"jsonrpc":"2.0","method":"eth_getBlockByNumber","params":["latest",False],"id":1}, timeout=timeout_threshold)
         response.raise_for_status()
-        return True
+        blocks = response.json().get("result")
+        if not blocks:
+            return False  # No blocks returned
+        # Check if block numbers are changing (indicating node is syncing)
+        block_numbers = [int(block["number"], 16) for block in blocks]
+        if len(set(block_numbers)) <= 1:
+            return False  # Block numbers are not changing, indicating potential issue with node
+        # Check if error or err key is present in the JSON response
+        if 'error' in response.json() or 'err' in response.json():
+            return False  # Error detected in JSON response
+        return True  # RPC endpoint is healthy
     except requests.exceptions.RequestException:
-        return False
+        return False  # Request failed or timed out
 
 def periodically_check_primary_health():
     global current_rpc, last_primary_health_time
@@ -61,7 +71,7 @@ def proxy_rpc_request():
         response = requests.post(current_rpc, json=json_data)
         response.raise_for_status()
         if current_rpc == rpc_set["secondary"]:
-            current_rpc = rpc_set["primary"]  # Switch back to primary if request was successful
+            current_rpc = rpc_set["primary"]  # Switch back to primary if request was successful and using secondary
             logging.info("Switched back to primary RPC endpoint: %s", rpc_set["primary"])
         return jsonify(response.json()), response.status_code
     except requests.exceptions.RequestException as e:
