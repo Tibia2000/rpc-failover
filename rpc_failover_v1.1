@@ -1,3 +1,23 @@
+"""
+RPC Failover with Gunicorn
+
+This script implements an RPC failover mechanism using Flask and Gunicorn. It manages multiple sets of primary and fallback RPC endpoints,
+periodically checks the health status of the primary endpoint, and switches to the fallback endpoint if the primary fails. It also switches
+back to the primary endpoint once it becomes healthy again for a specified duration.
+
+The health status of the RPC endpoints is determined by sending an eth_getBlockByNumber request and verifying if the block numbers are changing,
+indicating that the node is syncing or producing new blocks. Additionally, the responses of regular RPC calls are monitored for errors and error
+messages to trigger failover if necessary.
+
+Instructions:
+1. Install Gunicorn using `pip install gunicorn`.
+2. Configure the systemd service file to run the Gunicorn instance.
+3. Modify the primary and fallback RPC endpoints in the `rpc_sets` variable.
+4. Adjust the timeout thresholds and health check intervals as needed.
+5. Start the Gunicorn service and monitor the failover behavior.
+
+"""
+
 import logging
 from flask import Flask, request, jsonify
 import requests
@@ -47,7 +67,7 @@ def periodically_check_primary_health():
             if is_rpc_healthy(rpc_set["primary"]):
                 current_rpc = rpc_set["primary"]
                 last_primary_health_time = time.time()  # Update last_primary_health_time when primary becomes healthy
-                logging.info("Primary RPC endpoint is healthy.")
+                logging.info("Primary RPC endpoint is healthy. Switched back to primary.")
         elif current_rpc == rpc_set["primary"] and last_primary_health_time:
             if time.time() - last_primary_health_time >= minutes_threshold * 60:
                 current_rpc = rpc_set["secondary"]
