@@ -12,6 +12,30 @@ Monitoring of regular RPC calls for errors and error messages.
 Switching back to the primary endpoint after it has been healthy for a specified duration (minutes_threshold).
 
 
+## Failover logic
+
+Periodic Health Check for Primary Endpoint:
+
+The periodically_check_primary_health function is responsible for periodically checking the health status of the primary endpoint.
+This function continuously runs in a separate thread and executes health checks for the primary endpoint at regular intervals.
+If the primary endpoint is found to be unhealthy or unreachable, the script switches to using the secondary endpoint.
+Failover Logic:
+
+If the primary endpoint fails the periodic health check, the script switches to using the secondary endpoint.
+After failing over to the secondary endpoint, the script continues to periodically check the health status of the primary endpoint in the background.
+If the primary endpoint becomes healthy again, the script switches back to using the primary endpoint for subsequent requests.
+Health Check for Secondary Endpoint:
+
+Periodic Health Checks:
+
+The is_rpc_healthy function is used for the periodic health checks to determine if the RPC endpoint is healthy based on criteria such as block numbers changing and absence of error messages in the response.
+These periodic health checks are performed independently of incoming RPC requests and are executed at regular intervals to continuously monitor the health of the RPC endpoint.
+Regular RPC Calls:
+
+When handling each individual RPC request in the proxy_rpc_request function, the response is checked for errors and error messages using the check_json_error function.
+If an error is detected in the response of a regular RPC call, the script may switch to using the secondary RPC endpoint depending on the failover logic.
+By combining periodic health checks with the monitoring of regular RPC calls for errors and error messages, the script provides comprehensive health monitoring and failover capabilities to ensure reliable operation of the RPC service.
+
 ## Prerequisites
 
 - Python 3.x installed on your system.
