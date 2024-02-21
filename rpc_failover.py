@@ -1,3 +1,4 @@
+import logging
 from flask import Flask, request, jsonify
 import requests
 import threading
@@ -5,17 +6,21 @@ import time
 
 app = Flask(__name__)
 
-# Define your 11 sets of primary and fallback RPC endpoints
+# Configure logging to write to a file
+log_file = '/var/log/rpc_failover.log'
+logging.basicConfig(filename=log_file, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Define your number of sets of primary and fallback RPC endpoints
 rpc_sets = [
-    {"primary": "https address ", "fallback": "https address"},
-    {"primary": "https address", "fallback": "https address"},
+    {"primary": "https://arb-mai", "fallback": "https://arbitrum.blxxxxxxxxxxxxxxxxx"},
+    {"primary": "https://arbixxxxxxxxxxxxxxxxxx", "fallback": "https://arb-maixxxxxxxxxxxxxxxU"},
 ]
 
 # Add a global variable to store the currently selected RPC and counters
 current_rpc = None
 unhealthy_counter = 0
 healthy_counter = 0
-timeout_threshold = 15  # Set the timeout threshold in seconds
+timeout_threshold = 2  # Set the timeout threshold in seconds
 minutes_threshold = 1  # Set the minutes threshold
 
 def is_rpc_healthy(rpc_url):
@@ -35,6 +40,7 @@ def periodically_check_primary_health():
                 if unhealthy_counter >= timeout_threshold:
                     current_rpc = rpc_set["fallback"]
                     unhealthy_counter = 0
+                    logging.warning("Failover to fallback RPC endpoint: %s", rpc_set["fallback"])
             else:
                 healthy_counter += 1
                 if healthy_counter >= minutes_threshold:
@@ -69,7 +75,7 @@ def proxy_rpc_request():
         response.raise_for_status()
         return jsonify(response.json()), response.status_code
     except requests.exceptions.RequestException as e:
-        print(f"RPC request to {winner} failed: {e}")
+        logging.error("RPC request to %s failed: %s", winner, e)
         return jsonify({"error": "RPC request failed"}), 500
 
 if __name__ == '__main__':
