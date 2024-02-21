@@ -1,0 +1,15 @@
+[Unit]
+Description=Gunicorn instance to serve myapp
+After=network.target
+
+[Service]
+User=livepeer
+Group=livepeer
+WorkingDirectory=/etc/python
+ExecStart=/usr/local/bin/gunicorn -w 2 -b 0.0.0.0:5000 rpc_failover:app --log-level debug --timeout 90
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+
+
