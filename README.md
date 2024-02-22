@@ -43,6 +43,9 @@ By combining periodic health checks with the monitoring of regular RPC calls for
 
 ```
 pip install flask gunicorn
+add permission for log file
+chmod 777 /var/log/rpc_failover
+
 ```
 
 ## Configuration
