@@ -63,15 +63,16 @@ def is_rpc_healthy(rpc_url):
 def periodically_check_primary_health():
     global current_rpc, last_primary_health_time
     while True:
-        if current_rpc == rpc_set["secondary"]:
-            if is_rpc_healthy(rpc_set["primary"]):
-                current_rpc = rpc_set["primary"]
-                last_primary_health_time = time.time()  # Update last_primary_health_time when primary becomes healthy
-                logging.info("Primary RPC endpoint is healthy. Switched back to primary.")
-        elif current_rpc == rpc_set["primary"] and last_primary_health_time:
-            if time.time() - last_primary_health_time >= minutes_threshold * 60:
-                current_rpc = rpc_set["secondary"]
-                logging.warning("Failover to secondary RPC endpoint: %s", rpc_set["secondary"])
+        for rpc_set in rpc_sets:  # Iterate over each RPC set
+            if current_rpc == rpc_set["secondary"]:
+                if is_rpc_healthy(rpc_set["primary"]):
+                    current_rpc = rpc_set["primary"]
+                    last_primary_health_time = time.time()  # Update last_primary_health_time when primary becomes healthy
+                    logging.info("Primary RPC endpoint is healthy. Switched back to primary.")
+            elif current_rpc == rpc_set["primary"] and last_primary_health_time:
+                if time.time() - last_primary_health_time >= minutes_threshold * 60:
+                    current_rpc = rpc_set["secondary"]
+                    logging.warning("Failover to secondary RPC endpoint: %s", rpc_set["secondary"])
         time.sleep(60)
 
 # Start the periodic health check in a separate thread
