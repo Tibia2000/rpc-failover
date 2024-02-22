@@ -36,7 +36,7 @@ rpc_sets = [
 ]
 
 # Add a global variable to store the currently selected RPC and counters
-current_rpc = rpc_set["primary"]  # Initialize current_rpc with the primary endpoint of the first RPC set
+current_rpc = None  # TBD
 unhealthy_counter = 0
 healthy_counter = 0
 timeout_threshold = 2  # Set the timeout threshold in seconds
