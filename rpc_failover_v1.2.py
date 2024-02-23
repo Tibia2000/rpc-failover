@@ -22,8 +22,8 @@ rpc_sets = [
 current_rpc = None  # Initialize current_rpc with the primary endpoint of the first RPC set
 unhealthy_counter = 0
 healthy_counter = 0
-timeout_threshold = 15  # Set the timeout threshold in seconds
-minutes_threshold = 2  # Set the minutes threshold
+timeout_threshold = 4  # Set the timeout threshold in seconds
+minutes_threshold = 1  # Set the minutes threshold
 
 def is_rpc_healthy(rpc_url):
     try:
