@@ -22,7 +22,7 @@ rpc_sets = [
 current_rpc = None  # Initialize current_rpc with the primary endpoint of the first RPC set
 unhealthy_counter = 0
 healthy_counter = 0
-timeout_threshold = 4  # Set the timeout threshold in seconds
+timeout_threshold = 15  # Set the timeout threshold in seconds
 minutes_threshold = 1  # Set the minutes threshold
 
 def is_rpc_healthy(rpc_url):
@@ -54,8 +54,9 @@ def switch_to_fallback(rpc_set):
 
 def switch_to_primary(rpc_set):
     global current_rpc
-    current_rpc = rpc_set["primary"]
-    logging.info("Switching back to primary endpoint.")
+    if current_rpc != rpc_set["primary"]:
+        current_rpc = rpc_set["primary"]
+        logging.info("Switching back to primary endpoint.2")
 
 def periodically_check_primary_health():
     global current_rpc, unhealthy_counter, healthy_counter
@@ -74,9 +75,11 @@ def periodically_check_primary_health():
                         if healthy_counter >= 2 * minutes_threshold:
                             healthy_counter = 0  # Reset healthy counter
                             logging.info("Primary RPC is healthy and block number is updating.")
-            else:
-                if current_rpc != rpc_set["fallback"]:
+            elif current_rpc == rpc_set["fallback"]:
+                if is_rpc_healthy(rpc_set["primary"]):
                     switch_to_primary(rpc_set)
+                    logging.info("Switching back to primary endpoint.1")
+        logging.debug(f"Current RPC: {current_rpc}, Unhealthy Counter: {unhealthy_counter}, Healthy Counter: {healthy_counter}")
         time.sleep(60)
 
 # Start the periodic health check in a separate thread
@@ -87,7 +90,9 @@ def fetch_rpc_url_winner(rpc_set):
     global current_rpc
     # Choose the winner based on the current RPC
     winner = current_rpc if current_rpc else rpc_set["primary"]
-    return winner
+    if current_rpc != rpc_set["primary"]:
+        switch_to_primary(rpc_set)
+    return winner, current_rpc
 
 @app.route('/rpc', methods=['POST'])
 def proxy_rpc_request():
@@ -98,7 +103,10 @@ def proxy_rpc_request():
     rpc_set = rpc_sets[rpc_set_index]
 
     # Choose the RPC endpoint using the fetch_rpc_url_winner logic
-    winner = fetch_rpc_url_winner(rpc_set)
+    winner, selected_rpc = fetch_rpc_url_winner(rpc_set)
+
+    # Log which RPC endpoint is used before sending the request
+    logging.info("Sending RPC request to %s for RPC set: %s", selected_rpc, rpc_set)
 
     try:
         response = requests.post(winner, json=json_data, timeout=timeout_threshold)  # Set timeout for RPC requests
