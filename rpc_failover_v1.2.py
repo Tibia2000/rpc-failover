@@ -1,23 +1,3 @@
-"""
-RPC Failover with Gunicorn
-
-This script implements an RPC failover mechanism using Flask and Gunicorn. It manages multiple sets of primary and fallback RPC endpoints,
-periodically checks the health status of the primary endpoint, and switches to the fallback endpoint if the primary fails. It also switches
-back to the primary endpoint once it becomes healthy again for a specified duration.
-
-The health status of the RPC endpoints is determined by sending an eth_getBlockByNumber request and verifying if the block numbers are changing,
-indicating that the node is syncing or producing new blocks. Additionally, the responses of regular RPC calls are monitored for errors and error
-messages to trigger failover if necessary.
-
-Instructions:
-1. Install Gunicorn using `pip install gunicorn`.
-2. Configure the systemd service file to run the Gunicorn instance.
-3. Modify the primary and fallback RPC endpoints in the `rpc_sets` variable.
-4. Adjust the timeout thresholds and health check intervals as needed.
-5. Start the Gunicorn service and monitor the failover behavior.
-
-"""
-
 import logging
 from flask import Flask, request, jsonify
 import requests
@@ -25,21 +5,24 @@ import threading
 import time
 
 # Configure logging
-logging.basicConfig(filename='/var/log/rpc_failover', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(filename='/var/log/rpc_failover.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 app = Flask(__name__)
 
-# Define your number of sets of primary and fallback RPC endpoints
+# Define your 11 sets of primary and fallback RPC endpoints
 rpc_sets = [
-    {"primary": "https://arb-mainnet1", "fallback": "https://arbitrum.blo"},
-    {"primary": "https://arb3354419087ba6442e15d", "fallback": "https:/"},
+    {"primary": "https://", "fallback": "https://"},
+    {"primary": "https://", "fallback": "https://"},
+    {"primary": "https://", "fallback": "https://"},
+    {"primary": "https://", "fallback": "https://"},
+    {"primary": "https://", "fallback": "https://"},
 ]
 
 # Add a global variable to store the currently selected RPC and counters
-current_rpc = None  # TBD
+current_rpc = None  # Initialize current_rpc with the primary endpoint of the first RPC set
 unhealthy_counter = 0
 healthy_counter = 0
-timeout_threshold = 2  # Set the timeout threshold in seconds
+timeout_threshold = 15  # Set the timeout threshold in seconds
 minutes_threshold = 2  # Set the minutes threshold
 
 def is_rpc_healthy(rpc_url):
@@ -61,28 +44,7 @@ def is_block_number_updated(rpc_url):
         logging.error(f"Error checking block number: {e}")
     return False
 
-def periodically_check_primary_health():
-    global current_rpc, unhealthy_counter, healthy_counter
-    while True:
-        if current_rpc == rpc_set["primary"]:
-            if not is_rpc_healthy(current_rpc):
-                unhealthy_counter += 1
-                if unhealthy_counter >= timeout_threshold:
-                    switch_to_fallback()
-            else:
-                if not is_block_number_updated(current_rpc):
-                    switch_to_fallback()
-                else:
-                    healthy_counter += 1
-                    if healthy_counter >= 2 * minutes_threshold:
-                        healthy_counter = 0  # Reset healthy counter
-                        logging.info("Primary RPC is healthy and block number is updating.")
-        else:
-            if current_rpc != rpc_set["fallback"]:
-                switch_to_primary()
-        time.sleep(60)
-
-def switch_to_fallback():
+def switch_to_fallback(rpc_set):
     global current_rpc, unhealthy_counter, healthy_counter
     if current_rpc != rpc_set["fallback"]:
         current_rpc = rpc_set["fallback"]
@@ -90,10 +52,32 @@ def switch_to_fallback():
         healthy_counter = 0
         logging.info("Switching to fallback endpoint.")
 
-def switch_to_primary():
+def switch_to_primary(rpc_set):
     global current_rpc
     current_rpc = rpc_set["primary"]
     logging.info("Switching back to primary endpoint.")
+
+def periodically_check_primary_health():
+    global current_rpc, unhealthy_counter, healthy_counter
+    while True:
+        for rpc_set in rpc_sets:  # Iterate through each set of RPC endpoints
+            if current_rpc == rpc_set["primary"]:
+                if not is_rpc_healthy(current_rpc):
+                    unhealthy_counter += 1
+                    if unhealthy_counter >= timeout_threshold:
+                        switch_to_fallback(rpc_set)
+                else:
+                    if not is_block_number_updated(current_rpc):
+                        switch_to_fallback(rpc_set)
+                    else:
+                        healthy_counter += 1
+                        if healthy_counter >= 2 * minutes_threshold:
+                            healthy_counter = 0  # Reset healthy counter
+                            logging.info("Primary RPC is healthy and block number is updating.")
+            else:
+                if current_rpc != rpc_set["fallback"]:
+                    switch_to_primary(rpc_set)
+        time.sleep(60)
 
 # Start the periodic health check in a separate thread
 health_check_thread = threading.Thread(target=periodically_check_primary_health)
