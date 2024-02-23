@@ -68,38 +68,32 @@ def periodically_check_primary_health():
             if not is_rpc_healthy(current_rpc):
                 unhealthy_counter += 1
                 if unhealthy_counter >= timeout_threshold:
-                    if current_rpc != rpc_set["fallback"]:
-                        current_rpc = rpc_set["fallback"]
-                        unhealthy_counter = 0
-                        healthy_counter = 0
-                        logging.info("Switching to fallback endpoint due to timeout.")
+                    switch_to_fallback()
             else:
-                if is_block_number_updated(current_rpc):
+                if not is_block_number_updated(current_rpc):
+                    switch_to_fallback()
+                else:
                     healthy_counter += 1
                     if healthy_counter >= 2 * minutes_threshold:
-                        if current_rpc != rpc_set["primary"]:
-                            current_rpc = rpc_set["primary"]
-                            unhealthy_counter = 0
-                            healthy_counter = 0
-                            logging.info("Switching back to primary endpoint.")
-                else:
-                    if current_rpc != rpc_set["fallback"]:
-                        current_rpc = rpc_set["fallback"]
-                        unhealthy_counter = 0
-                        healthy_counter = 0
-                        logging.info("Block number not updating on primary. Switching to fallback.")
+                        healthy_counter = 0  # Reset healthy counter
+                        logging.info("Primary RPC is healthy and block number is updating.")
         else:
-            if is_rpc_healthy(rpc_set["primary"]):
-                if current_rpc != rpc_set["primary"]:
-                    current_rpc = rpc_set["primary"]
-                    unhealthy_counter = 0
-                    healthy_counter = 0
-                    logging.info("Switching to primary endpoint as it's healthy.")
-            else:
-                if current_rpc != rpc_set["fallback"]:
-                    logging.info("Primary endpoint is unhealthy. Staying on fallback.")
-                    current_rpc = rpc_set["fallback"]
+            if current_rpc != rpc_set["fallback"]:
+                switch_to_primary()
         time.sleep(60)
+
+def switch_to_fallback():
+    global current_rpc, unhealthy_counter, healthy_counter
+    if current_rpc != rpc_set["fallback"]:
+        current_rpc = rpc_set["fallback"]
+        unhealthy_counter = 0
+        healthy_counter = 0
+        logging.info("Switching to fallback endpoint.")
+
+def switch_to_primary():
+    global current_rpc
+    current_rpc = rpc_set["primary"]
+    logging.info("Switching back to primary endpoint.")
 
 # Start the periodic health check in a separate thread
 health_check_thread = threading.Thread(target=periodically_check_primary_health)
