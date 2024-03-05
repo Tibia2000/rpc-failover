@@ -9,7 +9,7 @@ logging.basicConfig(filename='/var/log/rpc_failover.log', level=logging.INFO, fo
 
 app = Flask(__name__)
 
-# Define your 11 sets of primary and fallback RPC endpoints
+# Define your sets of primary and fallback RPC endpoints
 rpc_sets = [
     {"primary": "https://", "fallback": "https://"},
     {"primary": "https://", "fallback": "https://"},
